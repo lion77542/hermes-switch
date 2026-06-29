@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hermes Switch</title>
+<style>
+/* ── Fluid scale: base `rem` adapts to viewport AND respects browser font prefs ── */
+html{font-size:clamp(0.875rem,0.4rem + 0.8vw,1.125rem)}
+/* ── Design tokens ── */
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#c9d1d9;--dim:#8b949e;--head:#f0f6fc;--blue:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#d2991d;--purple:#bc8cff;--btn-bg:#21262d;--radius:.625rem}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font:400 1rem/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* ── Layout ── */
+.top{background:var(--card);border-bottom:1px solid var(--border);padding:.875rem 1.5rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:20;flex-wrap:wrap;gap:.625rem}
+.top h1{font-size:1.125rem;font-weight:600;color:var(--head);display:flex;align-items:center;gap:.5rem}
+.top h1 em{color:var(--blue);font-style:normal}
+.cur-badge{display:flex;align-items:center;gap:.5rem;background:var(--btn-bg);border:1px solid var(--border);border-radius:.5rem;padding:.5rem 1rem;font-size:.875rem}
+.cur-badge i{width:.5rem;height:.5rem;border-radius:50%;background:var(--green);flex-shrink:0}
+.cur-badge b{color:var(--head);font-weight:600}
+.main{max-width:60rem;margin:0 auto;padding:1.5rem 1.75rem}
+.bar{display:flex;gap:.625rem;margin-bottom:1.25rem;flex-wrap:wrap}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:.375rem;padding:.5625rem 1.125rem;border-radius:.5rem;border:1px solid var(--border);background:var(--btn-bg);color:var(--text);font-size:.875rem;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
+.btn:hover{background:#30363d;border-color:var(--blue)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-pri{background:#238636;border-color:#2ea043;color:#fff}
+.btn-pri:hover{background:#2ea043}
+.btn-danger{color:var(--red)}
+.btn-danger:hover{background:#da3633;border-color:var(--red);color:#fff}
+.btn-sm{padding:.375rem .875rem;font-size:.8125rem}
+.btn-ghost{background:transparent;border:none;padding:.3125rem .625rem;color:var(--dim)}
+.btn-ghost:hover{color:var(--text)}
+
+/* ── Group headers ── */
+.group{margin-bottom:.375rem}
+.group-header{font-size:.8125rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--dim);padding:.875rem .25rem .5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.625rem}
+.group-header .count{font-size:.6875rem;background:var(--btn-bg);padding:.125rem .625rem;border-radius:.75rem;color:var(--dim);font-weight:400;text-transform:none;letter-spacing:0}
+
+/* ── Cards ── */
+.cards{display:flex;flex-direction:column;gap:.625rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.25rem;transition:border-color .15s,box-shadow .15s}
+.card:hover{border-color:#484f58}
+.card.live{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
+.card.testing{border-color:var(--orange)}
+.card-row{display:flex;justify-content:space-between;align-items:flex-start;gap:.875rem}
+.card-left{min-width:0;flex:1}
+.card-name{font-size:1.0625rem;font-weight:600;color:var(--head);display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.card-name .endpoint-name{cursor:pointer}
+.card-name .endpoint-name:hover{color:var(--blue)}
+
+/* ── Tags ── */
+.tag{font-size:.75rem;padding:.1875rem .625rem;border-radius:.75rem;font-weight:500;display:inline-flex;align-items:center;gap:.25rem}
+.tag-active{background:#238636;color:#fff}
+.tag-builtin{background:var(--blue);color:#fff}
+.tag-custom{background:var(--purple);color:#fff}
+.tag-prov{background:var(--btn-bg);border:1px solid var(--border);color:var(--dim)}
+.tag-model-count{background:transparent;border:1px solid var(--blue);color:var(--blue)}
+.tag-err{border:1px solid var(--red);color:var(--red);background:transparent}
+
+.card-acts{display:flex;gap:.375rem;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+.card-meta{font-size:.875rem;color:var(--dim);margin-top:.625rem;display:grid;grid-template-columns:1fr 1fr;gap:.25rem 1.25rem}
+.card-meta .label{color:var(--dim)}
+.card-meta .value{color:var(--text);word-break:break-all;font-family:ui-monospace,SFMono-Regular,Consolas,'Courier New',monospace;font-size:.875rem}
+.card-meta .full-row{grid-column:1/-1}
+.card-meta .models-list{display:flex;flex-wrap:wrap;gap:.375rem;margin-top:.25rem}
+.card-meta .model-chip{font-size:.8125rem;padding:.1875rem .625rem;background:var(--btn-bg);border:1px solid var(--border);border-radius:.3125rem;color:var(--dim);cursor:pointer;transition:all .1s}
+.card-meta .model-chip:hover{border-color:var(--blue);color:var(--blue)}
+.card-note{font-size:.8125rem;color:#6e7681;margin-top:.3125rem}
+.card-source{font-size:.75rem;color:#484f58;margin-top:.1875rem}
+
+.result{margin-top:.625rem;padding:.625rem .875rem;background:#0d1117;border-radius:.5rem;font-size:.875rem;display:none}
+.result.show{display:block}
+.result.ok{color:var(--green)}
+.result.fail{color:var(--red)}
+.result.loading{color:var(--orange)}
+
+/* ── Empty state ── */
+.empty{text-align:center;padding:3.125rem 1.25rem}
+.empty .icon{font-size:2.5rem;margin-bottom:.625rem}
+.empty h3{color:var(--head);margin-bottom:.25rem}
+.empty p{color:var(--dim);font-size:.8125rem;margin:.125rem 0}
+.empty .btn{margin-top:.75rem}
+
+/* ── Overlay / Modal ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:100;animation:fadeIn .15s}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:.625rem;padding:1.375rem;width:32rem;max-width:94vw;box-shadow:0 .625rem 1.875rem rgba(0,0,0,.5);max-height:90vh;overflow-y:auto}
+.modal h3{font-size:.9375rem;margin-bottom:.875rem;color:var(--head)}
+.modal h4{font-size:.8125rem;color:var(--dim);margin:.75rem 0 .375rem}
+.field{margin-bottom:.625rem}
+.field label{display:block;font-size:.6875rem;color:var(--dim);margin-bottom:.1875rem;text-transform:uppercase;letter-spacing:.03em}
+.field input,.field select{width:100%;padding:.4375rem .625rem;background:#0d1117;border:1px solid var(--border);border-radius:.3125rem;color:var(--text);font-size:.8125rem;outline:none;font-family:inherit}
+.field input:focus,.field select:focus{border-color:var(--blue)}
+.field .hint{font-size:.625rem;color:var(--dim);margin-top:.125rem}
+.field-row{display:flex;gap:.5rem;align-items:flex-end}
+.field-row .field{flex:1;margin-bottom:0}
+.m-acts{display:flex;justify-content:flex-end;gap:.4375rem;margin-top:1rem}
+
+/* ── Model picker ── */
+.model-picker{margin-top:.25rem}
+.model-picker-actions{display:flex;gap:.375rem;align-items:center;margin-bottom:.375rem}
+.model-list{max-height:11.25rem;overflow-y:auto;border:1px solid var(--border);border-radius:.3125rem;padding:.25rem;background:#0d1117}
+.model-list label{display:flex;align-items:center;gap:.375rem;padding:.25rem .5rem;cursor:pointer;font-size:.75rem;border-radius:.25rem;transition:background .1s}
+.model-list label:hover{background:var(--btn-bg)}
+.model-list input[type="radio"]{accent-color:var(--blue)}
+.model-list .no-models{padding:.75rem;text-align:center;color:var(--dim);font-size:.75rem}
+
+/* ── Switch dialog ── */
+.switch-dialog{background:var(--card);border:1px solid var(--border);border-radius:.625rem;padding:1.25rem;width:28rem;max-width:90vw;box-shadow:0 .625rem 1.875rem rgba(0,0,0,.5)}
+.switch-dialog h3{margin:0 0 .25rem;font-size:.875rem;color:var(--head)}
+.switch-dialog .sub{font-size:.6875rem;color:var(--dim);margin-bottom:.625rem}
+.switch-dialog .model-select{max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:.375rem;padding:.375rem;margin-bottom:.75rem;background:#0d1117}
+.switch-dialog .model-select label{display:flex;align-items:center;gap:.375rem;padding:.3125rem .5rem;cursor:pointer;font-size:.8125rem;border-radius:.25rem}
+.switch-dialog .model-select label:hover{background:var(--btn-bg)}
+.switch-dialog .model-select input[type="radio"]{accent-color:var(--blue)}
+.switch-dialog .no-models{padding:1rem;text-align:center;color:var(--dim);font-size:.75rem}
+.switch-dialog .acts{display:flex;justify-content:flex-end;gap:.375rem}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:1.25rem;right:1.25rem;padding:.625rem 1rem;border-radius:.4375rem;font-size:.75rem;z-index:300;animation:slideUp .25s;max-width:22rem;box-shadow:0 .25rem .75rem rgba(0,0,0,.4)}
+.toast.ok{background:#238636;color:#fff}
+.toast.err{background:#da3633;color:#fff}
+.toast.info{background:#1f6feb;color:#fff}
+
+/* ── Skeleton ── */
+.skel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.125rem;animation:pulse 1.5s infinite}
+.skel-line{height:.625rem;background:var(--border);border-radius:.25rem;margin:.375rem 0}
+.skel-line.w1{width:30%}.skel-line.w2{width:60%}.skel-line.w3{width:45%}
+
+/* ── Stats ── */
+.stats{display:flex;gap:1rem;padding:.5rem .25rem .25rem;font-size:.6875rem;color:var(--dim);flex-wrap:wrap}
+.stat-item{display:flex;align-items:center;gap:.25rem}
+.stat-item em{font-style:normal;color:var(--text);font-weight:500}
+
+/* ── Animations ── */
+@keyframes slideUp{from{transform:translateY(1rem);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+
+/* ── Responsive breakpoints ── */
+@media(max-width:48rem){
+  .card-row{flex-direction:column}
+  .card-acts{width:100%;justify-content:flex-start}
+  .card-meta{grid-template-columns:1fr}
+  .top{flex-direction:column;align-items:flex-start}
+  .field-row{flex-direction:column}
+  .bar{gap:.25rem}
+  .btn{padding:.3125rem .625rem}
+  .main{padding:1rem .875rem}
+  .modal{width:auto;margin:0 .5rem;padding:1rem}
+}
+@media(max-width:30rem){
+  .card{padding:.75rem .875rem}
+  .card-name{font-size:1rem}
+  .card-meta{font-size:.8125rem}
+  .btn{padding:.25rem .5rem;font-size:.8125rem}
+}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>⚡ <em>Hermes Switch</em></h1>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div class="cur-badge">
+      <i></i> 当前: <b id="curLabel">加载中…</b>
+    </div>
+    <div style="font-size:11px;color:var(--dim)" id="statsLabel"></div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="bar" id="toolbar">
+    <button class="btn btn-pri" onclick="addNew()">+ 添加端点</button>
+    <button class="btn" onclick="doRescan()">🔍 扫描</button>
+    <button class="btn" onclick="doUndo()" id="btnUndo" style="display:none">↩ 撤销切换</button>
+    <button class="btn btn-ghost" onclick="refresh()" title="刷新">↻</button>
+  </div>
+
+  <div id="content">
+    <div class="skel"><div class="skel-line w1"></div><div class="skel-line w2"></div><div class="skel-line w3"></div></div>
+    <div class="skel"><div class="skel-line w1"></div><div class="skel-line w2"></div><div class="skel-line w3"></div></div>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="overlay" id="modalBg" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3 id="modalTitle">添加端点</h3>
+    <form onsubmit="saveEp(event)" id="epForm">
+      <input type="hidden" id="editKey">
+
+      <div class="field-row">
+        <div class="field">
+          <label>名称 *</label>
+          <input id="fName" placeholder="例: my-deepseek" required autofocus>
+        </div>
+        <div class="field" style="flex:0 0 160px">
+          <label>Provider</label>
+          <select id="fProv" onchange="onProvChange()">
+            <option value="custom">custom（自定义）</option>
+            <option value="deepseek">deepseek</option>
+            <option value="openai">openai</option>
+            <option value="anthropic">anthropic</option>
+            <option value="openrouter">openrouter</option>
+            <option value="xai">xAI Grok</option>
+            <option value="moonshot">Moonshot Kimi</option>
+            <option value="minimax">MiniMax</option>
+            <option value="opencode-zen">OpenCode Zen</option>
+            <option value="google">Google Gemini</option>
+            <option value="dashscope">DashScope (阿里)</option>
+            <option value="github-copilot">GitHub Copilot</option>
+            <option value="huggingface">HuggingFace</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Base URL</label>
+        <input id="fUrl" placeholder="https://api.example.com/v1">
+        <div class="hint">内置 Provider（如 deepseek）可留空，自动使用默认地址</div>
+      </div>
+
+      <div class="field">
+        <label>API Key</label>
+        <input id="fKey" placeholder="sk-xxx">
+        <div class="hint">内置 Provider 可留空，从环境变量读取</div>
+      </div>
+
+      <!-- Model Picker -->
+      <div class="field model-picker" id="modelPicker" style="display:none">
+        <label>默认模型</label>
+        <div class="model-picker-actions">
+          <input id="fManualModel" placeholder="手动输入模型名…" style="flex:1;padding:7px 10px;background:#0d1117;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none">
+          <button type="button" class="btn btn-sm btn-pri" onclick="doFetchModels()" id="btnFetch" style="font-size:11px">📡 获取</button>
+          <span id="fFetchStatus" style="font-size:11px;color:var(--dim);white-space:nowrap"></span>
+        </div>
+        <div class="model-list" id="fModelList" onchange="onModelSelect()">
+          <div class="no-models">填好 URL 和 API Key 后点「获取」自动拉取，或直接在输入框里填模型名</div>
+        </div>
+        <!-- Per-model capability editing -->
+        <div id="modelCapsEdit" style="display:none;margin-top:8px;padding:8px;background:#0d1117;border:1px solid var(--border);border-radius:6px">
+          <div style="font-size:11px;color:var(--dim);margin-bottom:6px">✏️ 此模型能力覆盖（可选）</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <div><label style="font-size:10px;color:var(--dim)">推理强度</label>
+              <select id="fCapReasoning" style="width:100%;padding:3px 6px;background:#161b22;border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px">
+                <option value="">默认</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+                <option value="xhigh">xhigh</option>
+              </select></div>
+            <div><label style="font-size:10px;color:var(--dim)">Temperature</label>
+              <input id="fCapTemp" placeholder="默认" style="width:100%;padding:3px 6px;background:#161b22;border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px"></div>
+            <div><label style="font-size:10px;color:var(--dim)">Max Tokens</label>
+              <input id="fCapMaxTokens" placeholder="默认" style="width:100%;padding:3px 6px;background:#161b22;border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px"></div>
+            <div><label style="font-size:10px;color:var(--dim)">Top P</label>
+              <input id="fCapTopP" placeholder="默认" style="width:100%;padding:3px 6px;background:#161b22;border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px"></div>
+          </div>
+          <button type="button" class="btn btn-sm" onclick="saveModelCap()" style="margin-top:6px;font-size:10px">💾 保存此模型能力</button>
+          <span id="fCapSaveStatus" style="font-size:10px;color:var(--dim);margin-left:6px"></span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>备注</label>
+        <input id="fNote" placeholder="可选 - 用于识别这个端点">
+      </div>
+
+      <div class="m-acts">
+        <button type="button" class="btn" onclick="closeModal()">取消</button>
+        <button type="submit" class="btn btn-pri">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>
+let _eps = {};
+let _cur = {};
+let _stats = {};
+const $ = id => document.getElementById(id);
+const api = async (method, path, body) => {
+  const o = {method, headers: {'Content-Type': 'application/json'}};
+  if (body) o.body = JSON.stringify(body);
+  const r = await fetch(path, o);
+  return r.json();
+};
+
+function toast(msg, cls) {
+  cls = cls || 'ok';
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + cls;
+  t.style.display = 'block';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.style.display = 'none', 3500);
+}
+
+function esc(s) {
+  if (!s) return '';
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Refresh & Render ──
+
+async function refresh() {
+  try {
+    var d = await api('GET', '/api/endpoints');
+    var u = await api('GET', '/api/undo');
+    _eps = d.endpoints || {};
+    _cur = d.current || {};
+    _stats = d.stats || {};
+    var curText = esc(_cur.provider || '?') + ' · ' + esc(_cur.model || '?');
+    $('curLabel').innerHTML = curText;
+    $('btnUndo').style.display = u.available ? '' : 'none';
+    $('statsLabel').textContent = '共 ' + _stats.total + ' 个端点 · ' + _stats.with_models + ' 个已获取模型';
+    render();
+  } catch (e) {
+    toast('加载失败: ' + e.message, 'err');
+  }
+}
+
+function render() {
+  var names = Object.keys(_eps);
+  if (!names.length) {
+    $('content').innerHTML = '<div class="empty"><div class="icon">📭</div><h3>还没有端点</h3><p>点击「添加端点」手动添加，或「扫描」发现已配置的端点</p><button class="btn btn-pri" onclick="addNew()">+ 添加端点</button></div>';
+    return;
+  }
+
+  // Group endpoints by family
+  var builtin = [], custom = [];
+  for (var i = 0; i < names.length; i++) {
+    var e = _eps[names[i]];
+    var fam = (e.family === 'builtin' && e.provider in PROV_DEFAULTS) ? 'builtin' : 'custom';
+    if (fam === 'builtin') builtin.push(names[i]);
+    else custom.push(names[i]);
+  }
+
+  var html = '<div class="cards">';
+
+  if (builtin.length) {
+    html += '<div class="group"><div class="group-header">🔵 内置 Provider <span class="count">' + builtin.length + '</span></div></div>';
+    for (var i = 0; i < builtin.length; i++) html += epCard(builtin[i]);
+  }
+
+  if (custom.length) {
+    html += '<div class="group"><div class="group-header">🟣 自定义端点 <span class="count">' + custom.length + '</span></div></div>';
+    for (var i = 0; i < custom.length; i++) html += epCard(custom[i]);
+  }
+
+  $('content').innerHTML = html + '</div>';
+}
+
+function epCard(name) {
+  var e = _eps[name];
+  var act = e.active;
+  var url = e.base_url || '(使用默认地址)';
+  var keyInfo = e.api_key ? e.api_key.substring(0, 12) + '…' : '(环境变量)';
+  var model = e.model || '(未设默认)';
+  var mCount = (e._models && e._models.length) || 0;
+  var src = e._source || '';
+  var fam = (e.family === 'builtin' && e.provider in PROV_DEFAULTS) ? 'builtin' : 'custom';
+  var caps = e._model_caps || {};
+  var curCaps = caps[model] || {};
+
+  // Badges
+  var badges = '';
+  if (act) badges += '<span class="tag tag-active">● 当前</span>';
+  badges += ' <span class="tag ' + (fam === 'builtin' ? 'tag-builtin' : 'tag-custom') + '">' + esc(e.provider || 'custom') + '</span>';
+  if (e.provider_display && e.provider !== e.provider_display) {
+    badges += ' <span class="tag tag-prov">' + esc(e.provider_display) + '</span>';
+  }
+  if (mCount) badges += ' <span class="tag tag-model-count">📦 ' + mCount + '</span>';
+  if (curCaps.reasoning_effort) badges += ' <span class="tag" style="background:var(--orange);color:#000">🧠 ' + esc(curCaps.reasoning_effort) + '</span>';
+
+  // Models preview
+  var modelsHtml = '';
+  if (mCount) {
+    var shown = e._models.slice(0, 8);
+    var more = mCount - 8;
+    for (var j = 0; j < shown.length; j++) {
+      var isDefault = (shown[j] === e.model);
+      modelsHtml += '<span class="model-chip" ' + (isDefault ? 'style="border-color:var(--blue);color:var(--blue)"' : '') + '>' + esc(shown[j]) + '</span>';
+    }
+    if (more > 0) modelsHtml += '<span class="model-chip" style="border-color:transparent;color:var(--dim)">+' + more + '…</span>';
+  } else {
+    modelsHtml = '<span style="color:var(--dim);font-size:11px">暂无缓存模型，点击测试获取</span>';
+  }
+
+  // Actions
+  var acts = '<button class="btn btn-sm" onclick="testEp(' + "'" + esc(name) + "'" + ')" id="tbtn-' + esc(name) + '">🔍 测试</button>';
+  if (!act) {
+    acts += '<button class="btn btn-sm btn-pri" onclick="switchEp(' + "'" + esc(name) + "'" + ')">⚡ 切换</button>';
+  }
+  acts += '<button class="btn btn-sm" onclick="editEp(' + "'" + esc(name) + "'" + ')">✏️</button>';
+  acts += '<button class="btn btn-sm btn-danger" onclick="delEp(' + "'" + esc(name) + "'" + ')">✕</button>';
+
+  var notes = '';
+  if (e.note) notes += '<div class="card-note">📍 ' + esc(e.note) + '</div>';
+  if (src) notes += '<div class="card-source">📁 ' + esc(src) + '</div>';
+
+  return '<div class="card' + (act ? ' live' : '') + '" id="c-' + esc(name) + '">' +
+    '<div class="card-row"><div class="card-left"><div class="card-name">' +
+    '<span class="endpoint-name">' + esc(name) + '</span> ' + badges +
+    '</div></div><div class="card-acts">' + acts + '</div></div>' +
+    '<div class="card-meta">' +
+    '<div><span class="label">默认模型</span><br><span class="value">' + esc(model) + '</span></div>' +
+    '<div><span class="label">Key</span><br><span class="value">' + keyInfo + '</span></div>' +
+    '<div class="full-row"><span class="label">Base URL</span><br><span class="value">' + esc(url) + '</span></div>' +
+    '<div class="full-row"><span class="label">可用模型</span><br><div class="models-list">' + modelsHtml + '</div></div>' +
+    '</div>' +
+    notes + '<div class="result" id="res-' + esc(name) + '"></div></div>';
+}
+
+// ── Provider defaults ──
+var PROV_DEFAULTS = {
+  deepseek: 'https://api.deepseek.com/v1',
+  openai: 'https://api.openai.com/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+  xai: 'https://api.x.ai/v1',
+  moonshot: 'https://api.moonshot.cn/v1',
+  minimax: 'https://api.minimax.chat/v1',
+  opencode: 'https://opencode.ai/zen/v1',
+  anthropic: 'https://api.anthropic.com',
+  google: '',
+  dashscope: '',
+  'github-copilot': '',
+  huggingface: ''
+};
+
+function onProvChange() {
+  var p = $('fProv').value;
+  if (p === 'custom') {
+    $('fUrl').value = '';
+    $('fUrl').placeholder = 'https://api.example.com/v1';
+  } else if (PROV_DEFAULTS[p]) {
+    $('fUrl').value = PROV_DEFAULTS[p];
+    $('fUrl').placeholder = PROV_DEFAULTS[p];
+  }
+}
+
+// ── Modal ──
+
+function addNew() {
+  $('modalTitle').textContent = '添加端点';
+  $('editKey').value = '';
+  $('fName').value = '';
+  $('fUrl').value = '';
+  $('fKey').value = '';
+  $('fProv').value = 'custom';
+  $('fNote').value = '';
+  $('fFetchStatus').textContent = '';
+  $('fManualModel').value = '';
+  $('modelPicker').style.display = '';
+  $('fModelList').innerHTML = '<div class="no-models">填好 URL 和 API Key 后点「获取」自动拉取，或直接在输入框里填模型名</div>';
+  $('modelCapsEdit').style.display = 'none';
+  $('modalBg').style.display = 'flex';
+  setTimeout(() => $('fName').focus(), 50);
+}
+
+function editEp(name) {
+  var e = _eps[name];
+  if (!e) return;
+  $('modalTitle').textContent = '编辑端点';
+  $('editKey').value = name;
+  $('fName').value = name;
+  $('fUrl').value = e.base_url || '';
+  $('fKey').value = e.api_key || '';
+  $('fProv').value = e.provider || 'custom';
+  $('fNote').value = e.note || '';
+  $('fFetchStatus').textContent = '';
+  $('fManualModel').value = e.model || '';
+
+  var ms = e._models || [];
+  var mc = e._model_caps || {};
+  $('modelPicker').style.display = '';
+  if (ms.length) {
+    renderModelList(ms, e.model || ms[0], mc);
+  } else {
+    $('fModelList').innerHTML = '<div class="no-models">暂无缓存模型，可点「获取」拉取或直接在输入框里填</div>';
+  }
+  $('modelCapsEdit').style.display = 'none';
+  $('modalBg').style.display = 'flex';
+  setTimeout(onModelSelect, 100);
+}
+
+function closeModal() { $('modalBg').style.display = 'none'; }
+
+function renderModelList(models, selected, caps) {
+  var g = $('modelPicker');
+  var l = $('fModelList');
+  if (!models || !models.length) {
+    g.style.display = 'none';
+    return;
+  }
+  g.style.display = '';
+  var html = '';
+  caps = caps || {};
+  for (var i = 0; i < models.length; i++) {
+    var m = models[i];
+    var checked = (m === selected) ? ' checked' : '';
+    var mc = caps[m] || {};
+    var badges = '';
+    if (mc.reasoning_effort) badges += ' <span style="font-size:10px;color:var(--orange)">🧠</span>';
+    if (mc.supports_vision) badges += ' <span style="font-size:10px;color:var(--purple)">👁</span>';
+    if (mc.context_length) badges += ' <span style="font-size:10px;color:var(--dim)">' + (mc.context_length > 100000 ? Math.round(mc.context_length/1000)+'K' : mc.context_length) + '</span>';
+    html += '<label><input type="radio" name="fModelSel" value="' + esc(m) + '"' + checked + ' onclick="onModelSelect()"> <span>' + esc(m) + badges + '</span></label>';
+  }
+  l.innerHTML = html;
+  if (!selected && models.length) {
+    var first = l.querySelector('input');
+    if (first) first.checked = true;
+  }
+}
+
+async function doFetchModels() {
+  var url = $('fUrl').value.trim();
+  var key = $('fKey').value.trim();
+  var prov = $('fProv').value;
+  if (!url && !PROV_DEFAULTS[prov]) { toast('请填写 Base URL', 'err'); return; }
+  var btn = $('btnFetch'), st = $('fFetchStatus');
+  btn.disabled = true;
+  st.textContent = '正在获取…';
+  try {
+    var q = 'url=' + encodeURIComponent(url) + '&key=' + encodeURIComponent(key) + '&provider=' + encodeURIComponent(prov);
+    var r = await api('GET', '/api/fetch-models?' + q);
+    if (r.ok && r.models && r.models.length) {
+      renderModelList(r.models, r.models[0]);
+      st.innerHTML = '✅ ' + r.models.length + ' 个模型 (' + r.latency_ms + 'ms)';
+      // Store model caps from server if available
+      if (r.model_caps) {
+        _fetchedModelCaps = r.model_caps;
+        // Show caps on rendered models
+        showModelCaps(r.model_caps);
+      }
+      var ek = $('editKey').value;
+      if (ek && _eps[ek]) {
+        _eps[ek]._models = r.models;
+        if (r.model_caps) _eps[ek]._model_caps = r.model_caps;
+      }
+      setTimeout(onModelSelect, 50);
+    } else {
+      st.innerHTML = '❌ ' + (r.error || '无模型返回');
+      $('modelPicker').style.display = 'none';
+    }
+  } catch (e) {
+    st.innerHTML = '❌ ' + e.message;
+    $('modelPicker').style.display = 'none';
+  }
+  btn.disabled = false;
+}
+
+// Track fetched model caps
+var _fetchedModelCaps = {};
+
+function showModelCaps(caps) {
+  var labels = $('fModelList').querySelectorAll('label');
+  for (var i = 0; i < labels.length; i++) {
+    var radio = labels[i].querySelector('input');
+    if (!radio) continue;
+    var mid = radio.value;
+    var mc = caps[mid] || {};
+    var badges = '';
+    if (mc.reasoning_effort) badges += ' <span style="font-size:10px;color:var(--orange)">🧠</span>';
+    if (mc.supports_vision) badges += ' <span style="font-size:10px;color:var(--purple)">👁</span>';
+    if (mc.context_length) badges += ' <span style="font-size:10px;color:var(--dim)">' + (mc.context_length > 100000 ? Math.round(mc.context_length/1000)+'K' : mc.context_length) + '</span>';
+    if (mc.max_completion_tokens) badges += ' <span style="font-size:10px;color:var(--dim)">max' + Math.round(mc.max_completion_tokens/1000)+'K</span>';
+    // Replace text node with badges
+    var txt = labels[i].childNodes[labels[i].childNodes.length - 1];
+    if (txt && txt.nodeType === 3) {
+      var span = document.createElement('span');
+      span.innerHTML = esc(mid) + badges;
+      labels[i].replaceChild(span, txt);
+    }
+  }
+}
+
+function updateModelCaps(name) {
+  /* Save per-model capabilities from the fetched data */
+  var ek = $('editKey').value || $('fName').value.trim();
+  if (!ek || !_fetchedModelCaps || !Object.keys(_fetchedModelCaps).length) return;
+  
+  var sel = document.querySelector('input[name="fModelSel"]:checked');
+  if (!sel) return;
+  var mid = sel.value;
+  var caps = _fetchedModelCaps[mid] || {};
+  
+  // Save to backend
+  api('POST', '/api/model-caps', {name: ek, model: mid, caps: caps});
+}
+
+function onModelSelect() {
+  /* Show capability editor when a model is selected */
+  var sel = document.querySelector('input[name="fModelSel"]:checked');
+  if (!sel) { $('modelCapsEdit').style.display = 'none'; return; }
+  
+  var ek = $('editKey').value || $('fName').value.trim();
+  var mid = sel.value;
+  var caps = {};
+  if (ek && _eps[ek] && _eps[ek]._model_caps && _eps[ek]._model_caps[mid]) {
+    caps = _eps[ek]._model_caps[mid];
+  }
+  
+  $('fCapReasoning').value = caps.reasoning_effort || '';
+  $('fCapTemp').value = caps.temperature || '';
+  $('fCapMaxTokens').value = caps.max_tokens || '';
+  $('fCapTopP').value = caps.top_p || '';
+  $('modelCapsEdit').style.display = '';
+  $('fCapSaveStatus').textContent = '';
+}
+
+function saveModelCap() {
+  /* Save per-model capability override to backend */
+  var ek = $('editKey').value || $('fName').value.trim();
+  if (!ek) { $('fCapSaveStatus').textContent = '❌ 先保存端点'; return; }
+  
+  var sel = document.querySelector('input[name="fModelSel"]:checked');
+  if (!sel) { $('fCapSaveStatus').textContent = '❌ 选一个模型'; return; }
+  
+  var mid = sel.value;
+  var caps = {};
+  if ($('fCapReasoning').value) caps.reasoning_effort = $('fCapReasoning').value;
+  if ($('fCapTemp').value) caps.temperature = parseFloat($('fCapTemp').value);
+  if ($('fCapMaxTokens').value) caps.max_tokens = parseInt($('fCapMaxTokens').value);
+  if ($('fCapTopP').value) caps.top_p = parseFloat($('fCapTopP').value);
+  
+  var st = $('fCapSaveStatus');
+  st.textContent = '保存中…';
+  api('POST', '/api/model-caps', {name: ek, model: mid, caps: caps}).then(function(r) {
+    if (r.ok) {
+      st.textContent = '✅ 已保存';
+      // Also update local cache
+      if (!_eps[ek]._model_caps) _eps[ek]._model_caps = {};
+      _eps[ek]._model_caps[mid] = caps;
+    } else {
+      st.textContent = '❌ ' + (r.error || '失败');
+    }
+  });
+}
+
+async function saveEp(e) {
+  e.preventDefault();
+  var ek = $('editKey').value;
+  var name = $('fName').value.trim();
+  var sel = document.querySelector('input[name="fModelSel"]:checked');
+  var model = sel ? sel.value : $('fManualModel').value.trim() || '';
+  var allModels = [];
+  var labels = $('fModelList').querySelectorAll('input[name="fModelSel"]');
+  for (var i = 0; i < labels.length; i++) {
+    if (labels[i].value) allModels.push(labels[i].value);
+  }
+  var data = {
+    name: name,
+    base_url: $('fUrl').value.trim(),
+    api_key: $('fKey').value.trim(),
+    provider: $('fProv').value,
+    model: model,
+    note: $('fNote').value.trim(),
+    _models: allModels.length ? allModels : (ek && _eps[ek] ? _eps[ek]._models || [] : [])
+  };
+  if (!name) { toast('名称不能为空', 'err'); return; }
+  var r;
+  if (ek) r = await api('PUT', '/api/endpoints/' + encodeURIComponent(ek), data);
+  else r = await api('POST', '/api/endpoints', data);
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast(ek ? '已更新' : '已添加');
+  closeModal();
+  await refresh();
+}
+
+// ── Card Actions ──
+
+async function delEp(name) {
+  if (!confirm('确认删除端点 "' + name + '"?')) return;
+  var r = await api('DELETE', '/api/endpoints/' + encodeURIComponent(name));
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast('已删除 "' + name + '"');
+  await refresh();
+}
+
+async function switchEp(name) {
+  var e = _eps[name];
+  if (!e) return;
+  var models = e._models || [];
+  var reasoningOptions = e._reasoning_options || [];
+  var modelCaps = e._model_caps || {};
+
+  var div = document.createElement('div');
+  div.className = 'overlay';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:200';
+  div.onclick = function(ev) { if (ev.target === this) { this.parentNode.removeChild(this); } };
+
+  // Compute what models to show
+  var listHtml = '';
+  var defaultModel = e.model || (models.length ? models[0] : '');
+  var defaultCaps = modelCaps[defaultModel] || {};
+  var savedReasoning = defaultCaps.reasoning_effort || '';
+
+  if (models.length) {
+    // Show cached models as radio buttons
+    for (var i = 0; i < models.length; i++) {
+      var checked = (models[i] === defaultModel) ? ' checked' : '';
+      var caps = modelCaps[models[i]] || {};
+      var badges = '';
+      if (caps.reasoning_effort) badges += ' <span style="font-size:10px;color:var(--orange)">🧠</span>';
+      if (caps.supports_vision) badges += ' <span style="font-size:10px;color:var(--purple)">👁</span>';
+      if (caps.context_length) badges += ' <span style="font-size:10px;color:var(--dim)">' + (caps.context_length > 100000 ? Math.round(caps.context_length/1000)+'K' : caps.context_length) + '</span>';
+      listHtml += '<label><input type="radio" name="swModel" value="' + esc(models[i]) + '"' + checked + '> ' + esc(models[i]) + badges + '</label>';
+    }
+  } else {
+    listHtml = '<div class="no-models">没有缓存的模型列表。<br>可以先测试端点获取模型，或直接输入模型名称：</div>' +
+      '<div style="padding:8px"><input id="swModelInput" placeholder="输入模型名称" style="width:100%;padding:6px 8px;background:#0d1117;border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;outline:none"></div>';
+  }
+
+  // Reasoning effort: auto by default, checkbox to show manual selector
+  var reasoningHtml = '';
+  if (reasoningOptions.length) {
+    reasoningHtml = '<div style="margin-top:10px;padding:8px 0;border-top:1px solid var(--border)">' +
+      '<label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px;cursor:pointer">' +
+      '<input type="checkbox" id="swShowReasoning" onclick="toggleSwReasoning()">' +
+      '手动设置推理强度</label>' +
+      '<div id="swReasoningRow" style="display:none;margin-top:4px">' +
+      '<select id="swReasoning" style="width:100%;padding:5px 8px;background:#0d1117;border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;outline:none">' +
+      '<option value="">默认 (不设置)</option>';
+    for (var i = 0; i < reasoningOptions.length; i++) {
+      reasoningHtml += '<option value="' + esc(reasoningOptions[i]) + '">' + esc(reasoningOptions[i]) + '</option>';
+    }
+    reasoningHtml += '</select></div></div>';
+  }
+
+  div.innerHTML = '<div class="switch-dialog">' +
+    '<h3>⚡ 切换到 ' + esc(name) + '</h3>' +
+    '<div class="sub">' + esc(e.provider) + (e.base_url ? ' · ' + esc(e.base_url) : '') + '</div>' +
+    '<div class="model-select">' + listHtml + '</div>' +
+    reasoningHtml +
+    '<div class="acts">' +
+    '<button class="btn" id="swCancel">取消</button>' +
+    '<button class="btn btn-pri" id="swConfirm">切换</button></div></div>';
+
+  document.body.appendChild(div);
+
+  // Focus input if no models
+  if (!models.length) {
+    setTimeout(function() {
+      var inp = document.getElementById('swModelInput');
+      if (inp) { inp.focus(); inp.value = promptModel; }
+    }, 100);
+  }
+
+  var result = await new Promise(function(resolve) {
+    document.getElementById('swConfirm').onclick = function() {
+      var sel = div.querySelector('input[name="swModel"]:checked');
+      var val = sel ? sel.value : null;
+      if (!val) {
+        var inp = document.getElementById('swModelInput');
+        val = inp ? inp.value.trim() : null;
+      }
+      // Get reasoning effort: auto from caps if unchecked, manual if checked
+      var autoReasoning = savedReasoning || '';
+      var isManual = document.getElementById('swShowReasoning');
+      var reasoningVal = '';
+      if (isManual && isManual.checked) {
+        var re = document.getElementById('swReasoning');
+        reasoningVal = re ? re.value : '';
+      } else if (autoReasoning) {
+        reasoningVal = autoReasoning;
+      }
+      resolve({model: val || null, reasoning_effort: reasoningVal});
+      if (div.parentNode) div.parentNode.removeChild(div);
+    };
+    document.getElementById('swCancel').onclick = function() {
+      resolve(null);
+      if (div.parentNode) div.parentNode.removeChild(div);
+    };
+  });
+
+  if (!result) return;
+
+  var body = {name: name, model: result.model, params: {}};
+  if (result.reasoning_effort) body.params.reasoning_effort = result.reasoning_effort;
+
+  var r = await api('POST', '/api/switch', body);
+  if (r.error) { toast(r.error, 'err'); return; }
+  var msg = '已切换到 "' + name + '" · ' + (result.model || e.model || '默认');
+  if (result.reasoning_effort) msg += ' · 推理=' + result.reasoning_effort;
+  toast(msg);
+  await refresh();
+}
+
+function toggleSwReasoning() {
+  // Toggle the manual reasoning dropdown visibility
+  var cb = document.getElementById('swShowReasoning');
+  var row = document.getElementById('swReasoningRow');
+  if (cb && row) {
+    row.style.display = cb.checked ? '' : 'none';
+  }
+}
+
+async function testEp(name) {
+  var btn = $('tbtn-' + name);
+  var res = $('res-' + name);
+  btn.disabled = true;
+  btn.textContent = '…';
+  res.className = 'result show loading';
+  res.textContent = '正在测试连接…';
+
+  try {
+    var r = await api('GET', '/api/test?name=' + encodeURIComponent(name));
+    if (r.error) {
+      res.className = 'result show fail';
+      res.textContent = '❌ ' + r.error + (r.source ? ' (来源: ' + r.source + ')' : '');
+    } else {
+      res.className = 'result show ok';
+      var mCount = r.models ? r.models.length : 0;
+      var ms = r.models ? r.models.slice(0, 6).join(', ') : '';
+      var more = mCount > 6 ? ' …+' + (mCount - 6) : '';
+      var latency = r.latency_ms || '?';
+      res.innerHTML = '✅ ' + latency + 'ms · ' + mCount + ' 个模型: ' + esc(ms) + more;
+      if (r.reply) res.innerHTML += '<br><span style="color:var(--dim)">chat: ' + esc(r.reply.substring(0, 100)) + '</span>';
+    }
+  } catch (e) {
+    res.className = 'result show fail';
+    res.textContent = '❌ ' + e.message;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🔍 测试';
+  var savedClass = res.className;
+  var savedHTML = res.innerHTML;
+  await refresh();
+  // Restore result after refresh
+  var newRes = document.getElementById('res-' + name);
+  if (newRes && savedHTML) {
+    newRes.className = savedClass;
+    newRes.innerHTML = savedHTML;
+  }
+}
+
+async function doRescan() {
+  var btn = document.querySelector('#toolbar .btn:nth-child(2)');
+  btn.disabled = true;
+  btn.textContent = '扫描中…';
+  try {
+    var r = await api('GET', '/api/rescan');
+    if (r.ok) toast('扫描完成: ' + r.found + ' 个新端点，共 ' + r.total + ' 个', 'info');
+    else toast(r.error || '扫描失败', 'err');
+  } catch (e) { toast('扫描失败: ' + e.message, 'err'); }
+  btn.disabled = false;
+  btn.textContent = '🔍 扫描';
+  await refresh();
+}
+
+async function doUndo() {
+  var r = await api('POST', '/api/undo');
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast('已撤销 — 恢复为 ' + r.restored + ' · ' + r.model);
+  await refresh();
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'n' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); addNew(); }
+  if (e.key === 'Escape') { closeModal(); }
+});
+
+refresh();
+</script>
+</body>
+</html>
