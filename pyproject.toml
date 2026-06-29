@@ -1,0 +1,29 @@
+[project]
+name = "hermes-switch"
+version = "4.0.0"
+description = "多端点快速切换器 for Hermes Agent — 带 Web UI 的 API endpoint 管理器"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = ["pyyaml"]
+license = {text = "MIT"}
+authors = [{name = "dlamd"}]
+keywords = ["hermes", "endpoint", "api", "switcher"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Utilities",
+]
+
+[project.scripts]
+hermes-switch = "hermes_switch:main"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages]
+find = {}
