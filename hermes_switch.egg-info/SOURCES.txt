@@ -1,0 +1,12 @@
+README.md
+pyproject.toml
+hermes_switch/__init__.py
+hermes_switch/__main__.py
+hermes_switch/endpoints.py
+hermes_switch/server.py
+hermes_switch.egg-info/PKG-INFO
+hermes_switch.egg-info/SOURCES.txt
+hermes_switch.egg-info/dependency_links.txt
+hermes_switch.egg-info/entry_points.txt
+hermes_switch.egg-info/requires.txt
+hermes_switch.egg-info/top_level.txt
