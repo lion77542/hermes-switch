@@ -28,9 +28,9 @@ pip install -e .
 ### Web UI
 
 ```bash
-hermes-switch          # 启动 Web UI，自动打开浏览器
-hermes-switch web      # 同上
-hermes-switch web 8080 # 指定端口
+hermes-switch                   # 启动 Web UI，自动打开浏览器
+hermes-switch web [端口]        # 指定端口启动
+hermes-switch web 9020 -p st67  # 启动并绑定某个 profile
 ```
 
 打开浏览器访问 `http://127.0.0.1:9020`
@@ -38,12 +38,16 @@ hermes-switch web 8080 # 指定端口
 ### CLI
 
 ```bash
-hermes-switch list       # 列出所有端点（分组显示）
-hermes-switch current    # 显示当前端点
-hermes-switch use st     # 切换到 st 端点
-hermes-switch use st deepseek-v4-flash  # 切换端点并指定模型
-hermes-switch remove old # 删除端点
-hermes-switch rescan     # 重新扫描发现端点
+hermes-switch list              # 列出所有端点（分组显示）
+hermes-switch current           # 显示当前端点
+hermes-switch current -p st67   # 显示指定 profile 的当前端点
+hermes-switch use st            # 切换到 st 端点（默认 profile）
+hermes-switch use deepseek -p st67   # 切换到 deepseek（st67 profile）
+hermes-switch use st sensenova-6.7-flash-lite -p st67  # 切到指定端点+模型
+hermes-switch undo              # 撤销上次切换（默认 profile）
+hermes-switch undo -p st67      # 撤销指定 profile 的切换
+hermes-switch remove old        # 删除端点
+hermes-switch rescan            # 重新扫描发现端点
 ```
 
 ## 概念
@@ -84,7 +88,18 @@ hermes-switch rescan     # 重新扫描发现端点
 
 ## 切换后
 
-切换后需要 **`/reset`** 或重启 Hermes 才能生效。Web UI 有「撤销切换」按钮。
+切换后需要 **`/reset`** 或重启 Hermes 才能生效。Web UI 有「撤销切换」按钮，CLI 有 `undo` 命令。
+
+### 多 Profile 支持
+
+Hermes 支持多 profile（`hermes -p <名称>`），可以用 `-p` 参数操作指定 profile：
+
+```bash
+hermes-switch use deepseek -p st67    # 切换 st67 profile 的配置
+hermes-switch current -p st67         # 查看 st67 的当前配置
+```
+
+Web UI 顶栏有 profile 下拉框，选哪个就操作哪个。不指定 profile 则操作默认配置。`HERMES_PROFILE` 环境变量会自动检测当前 profile。
 
 ## License
 
