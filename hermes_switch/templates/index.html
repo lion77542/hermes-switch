@@ -167,9 +167,12 @@ body{font:400 1rem/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-s
     <div class="cur-badge">
       <i></i> 当前: <b id="curLabel">加载中…</b>
     </div>
-    <select id="profileSelect" onchange="onProfileChange()" style="padding:4px 8px;background:var(--btn-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none;cursor:pointer;font-family:inherit">
-      <option value="">默认</option>
-    </select>
+    <div style="display:flex;align-items:center;gap:4px;position:relative">
+      <select id="profileSelect" onchange="onProfileChange()" style="padding:4px 8px;background:var(--btn-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none;cursor:pointer;font-family:inherit">
+        <option value="">默认</option>
+      </select>
+      <span class="help-tip" title="Profile = Hermes 的独立配置账号。不用 -p 启动的人选「默认」就行。">?</span>
+    </div>
     <div style="font-size:11px;color:var(--dim)" id="statsLabel"></div>
   </div>
 </div>
