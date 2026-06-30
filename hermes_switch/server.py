@@ -97,7 +97,7 @@ class Handler(BaseHTTPRequestHandler):
     def _is_auto_discovered(ep):
         """Check if an endpoint was auto-discovered vs user-added."""
         src = (ep.get('_source') or ep.get('note', '') or '').lower()
-        auto_keywords = ['环境变量', '当前配置', 'config custom', 'profile', '检测到']
+        auto_keywords = ['环境变量', '当前配置', 'config custom', 'profile', '检测到', 'env:']
         return any(k in src for k in auto_keywords)
 
     def do_OPTIONS(self):
@@ -121,7 +121,7 @@ class Handler(BaseHTTPRequestHandler):
 
         elif path == '/api/endpoints':
             try:
-                eps = load_endpoints()
+                eps = load_endpoints(self._profile())
                 current = get_current(self._profile())
                 eps = self._enrich_endpoints(eps, current)
             except Exception as e:
@@ -138,14 +138,14 @@ class Handler(BaseHTTPRequestHandler):
             })
 
         elif path == '/api/rescan':
-            discovered = auto_discover()
-            existing = load_endpoints()
+            discovered = auto_discover(self._profile())
+            existing = load_endpoints(self._profile())
             # Keep user-added endpoints, replace auto-discovered ones with fresh data
             fresh = dict(discovered)
             for name, ep in existing.items():
                 if name not in fresh and not Handler._is_auto_discovered(ep):
                     fresh[name] = ep
-            save_endpoints(fresh)
+            save_endpoints(fresh, self._profile())
             self._send_json({'ok': True, 'found': len(discovered), 'total': len(fresh), 'kept': len(fresh) - len(discovered)})
 
         elif path == '/api/fetch-models':
@@ -211,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
             if not name:
                 self._send_json({'error': 'name required'}, 400)
                 return
-            eps = load_endpoints()
+            eps = load_endpoints(self._profile())
             if name not in eps:
                 self._send_json({'error': f'端点 "{name}" 不存在'}, 404)
                 return
@@ -225,7 +225,7 @@ class Handler(BaseHTTPRequestHandler):
             # On success, cache models
             if result.get('ok') and result.get('models'):
                 eps[name]['_models'] = result['models']
-                save_endpoints(eps)
+                save_endpoints(eps, self._profile())
             self._send_json(result)
 
         else:
@@ -249,7 +249,7 @@ class Handler(BaseHTTPRequestHandler):
             if '/' in name or '\\' in name:
                 self._send_json({'error': '名称不能包含 / 或 \\'}, 400)
                 return
-            eps = load_endpoints()
+            eps = load_endpoints(self._profile())
             if name in eps:
                 self._send_json({'error': f'端点 "{name}" 已存在'}, 409)
                 return
@@ -266,7 +266,7 @@ class Handler(BaseHTTPRequestHandler):
                 '_model_caps': data.get('_model_caps', {}),
                 '_params': data.get('_params', {}),
             }
-            save_endpoints(eps)
+            save_endpoints(eps, self._profile())
             self._send_json({'ok': True, 'name': name})
 
         elif path == '/api/switch':
@@ -321,14 +321,14 @@ class Handler(BaseHTTPRequestHandler):
             if not name or not model:
                 self._send_json({'error': '需要端点名和模型名'}, 400)
                 return
-            eps = load_endpoints()
+            eps = load_endpoints(self._profile())
             if name not in eps:
                 self._send_json({'error': f'端点 "{name}" 不存在'}, 404)
                 return
             if '_model_caps' not in eps[name]:
                 eps[name]['_model_caps'] = {}
             eps[name]['_model_caps'][model] = caps
-            save_endpoints(eps)
+            save_endpoints(eps, self._profile())
             self._send_json({'ok': True})
 
         else:
@@ -346,7 +346,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         name = path.split('/')[-1]
-        eps = load_endpoints()
+        eps = load_endpoints(self._profile())
         if name not in eps:
             self._send_json({'error': f'端点 "{name}" 不存在'}, 404)
             return
@@ -364,7 +364,7 @@ class Handler(BaseHTTPRequestHandler):
             '_model_caps': existing.get('_model_caps', {}),
             '_params': existing.get('_params', {}),
         }
-        save_endpoints(eps)
+        save_endpoints(eps, self._profile())
         self._send_json({'ok': True, 'name': name})
 
     def do_DELETE(self):
@@ -379,12 +379,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         name = path.split('/')[-1]
-        eps = load_endpoints()
+        eps = load_endpoints(self._profile())
         if name not in eps:
             self._send_json({'error': f'端点 "{name}" 不存在'}, 404)
             return
         del eps[name]
-        save_endpoints(eps)
+        save_endpoints(eps, self._profile())
         self._send_json({'ok': True, 'deleted': name})
 
 
