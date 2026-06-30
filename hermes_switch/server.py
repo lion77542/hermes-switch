@@ -19,12 +19,23 @@ from .endpoints import (
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
 DEFAULT_PORT = 9020
 SERVER_START_TIME = 0.0
+ACTIVE_PROFILE = ''  # Set by run_server()
 
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         if os.environ.get('HERMES_SWITCH_VERBOSE'):
             sys.stderr.write("[%s] %s\n" % (self.address_string(), format % args))
+
+    def _profile(self):
+        """Return the active profile name or empty string for default.
+        Checks query parameter first, then falls back to global ACTIVE_PROFILE."""
+        from urllib.parse import parse_qs
+        qs = parse_qs(urlparse(self.path).query)
+        qp = qs.get('profile', [None])[0]
+        if qp:
+            return qp
+        return ACTIVE_PROFILE
 
     def _send_json(self, data, status=200):
         try:
@@ -111,7 +122,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == '/api/endpoints':
             try:
                 eps = load_endpoints()
-                current = get_current()
+                current = get_current(self._profile())
                 eps = self._enrich_endpoints(eps, current)
             except Exception as e:
                 self._send_json({'error': f'读取配置失败: {e}', 'endpoints': {}, 'current': {}}, 500)
@@ -163,9 +174,23 @@ class Handler(BaseHTTPRequestHandler):
             })
 
         elif path == '/api/current':
-            cur = get_current()
+            cur = get_current(self._profile())
             cur['provider_display'] = get_provider_display(cur.get('provider', ''))
+            cur['profile'] = self._profile()
             self._send_json(cur)
+
+        elif path == '/api/profiles':
+            """List available profiles."""
+            import glob
+            profiles_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'profiles')
+            if not os.path.isdir(profiles_dir):
+                profiles_dir = os.path.join(os.path.expanduser('~/.hermes' if os.name != 'nt' else os.environ.get('LOCALAPPDATA', os.path.expanduser('~/AppData/Local')) + '/hermes'), 'profiles')
+            profiles = []
+            if os.path.isdir(profiles_dir):
+                for p in sorted(os.listdir(profiles_dir)):
+                    if os.path.isfile(os.path.join(profiles_dir, p, 'config.yaml')):
+                        profiles.append(p)
+            self._send_json({'profiles': profiles, 'active': self._profile()})
 
         elif path == '/api/health':
             """Quick health check for process management."""
@@ -178,7 +203,7 @@ class Handler(BaseHTTPRequestHandler):
             })
 
         elif path == '/api/undo':
-            self._send_json({'available': has_undo()})
+            self._send_json({'available': has_undo(self._profile())})
 
         elif path == '/api/test':
             qs = parse_qs(urlparse(self.path).query)
@@ -252,7 +277,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({'error': '端点名称不能为空'}, 400)
                 return
             try:
-                ep = switch_endpoint(name, model, params)
+                ep = switch_endpoint(name, model, params, self._profile())
                 self._send_json({
                     'ok': True,
                     'switched': name,
@@ -267,7 +292,7 @@ class Handler(BaseHTTPRequestHandler):
 
         elif path == '/api/undo':
             try:
-                prev = undo_switch()
+                prev = undo_switch(self._profile())
                 self._send_json({
                     'ok': True,
                     'restored': prev.get('provider', ''),
@@ -380,9 +405,13 @@ def _cleanup_server():
     remove_pid()
 
 
-def run_server(host='127.0.0.1', port=None, open_browser=True):
+def run_server(host='127.0.0.1', port=None, open_browser=True, profile=''):
     import glob
     from .endpoints import write_pid, kill_previous_instance, PID_FILE
+
+    # Set active profile globally for handlers
+    global ACTIVE_PROFILE
+    ACTIVE_PROFILE = profile
 
     # Kill previous instance if running
     killed = kill_previous_instance()
