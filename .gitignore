@@ -1,0 +1,14 @@
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+.venv/
+# Contains API keys
+endpoints.json
+# Local dev files
+.github_token
+.github_token.sh
+check_repos.py
+run-switch.bat
+
