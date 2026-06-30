@@ -16,9 +16,25 @@ import os, sys
 sys.dont_write_bytecode = True
 
 
+def _parse_profile():
+    """Parse -p/--profile argument from sys.argv."""
+    for i, arg in enumerate(sys.argv):
+        if arg in ('-p', '--profile') and i + 1 < len(sys.argv):
+            # Remove from args so downstream parsers don't see it
+            val = sys.argv.pop(i + 1)
+            sys.argv.pop(i)
+            return val
+    return ''
+
+
 def main():
+    profile = _parse_profile()
+    if not profile:
+        from .endpoints import _active_profile
+        profile = _active_profile()
+
     if len(sys.argv) < 2:
-        _cmd_web()
+        _cmd_web(profile=profile)
         return
 
     cmd = sys.argv[1].lower()
@@ -28,13 +44,15 @@ def main():
         return
 
     if cmd in ('web', 'ui', 'serve'):
-        _cmd_web(sys.argv[2] if len(sys.argv) > 2 else None)
+        _cmd_web(sys.argv[2] if len(sys.argv) > 2 else None, profile=profile)
     elif cmd == 'list':
-        _cmd_list()
+        _cmd_list(profile=profile)
     elif cmd == 'current':
-        _cmd_current()
+        _cmd_current(profile=profile)
     elif cmd == 'use':
-        _cmd_use(sys.argv)
+        _cmd_use(sys.argv, profile=profile)
+    elif cmd == 'undo':
+        _cmd_undo(profile=profile)
     elif cmd == 'remove':
         _cmd_remove(sys.argv)
     elif cmd == 'rescan':
@@ -47,7 +65,7 @@ def main():
         sys.exit(1)
 
 
-def _cmd_web(port_arg=None):
+def _cmd_web(port_arg=None, profile=None):
     from .server import run_server
     port = None
     if port_arg:
@@ -56,16 +74,16 @@ def _cmd_web(port_arg=None):
         except ValueError:
             print(f"无效端口: {port_arg}")
             sys.exit(1)
-    run_server(port=port)
+    run_server(port=port, profile=profile)
 
 
-def _cmd_list():
+def _cmd_list(profile=None):
     from .endpoints import (
         load_endpoints, get_current,
         get_provider_family, get_provider_display
     )
     eps = load_endpoints()
-    cur = get_current()
+    cur = get_current(profile)
 
     if not eps:
         print("没有注册的端点。")
@@ -109,31 +127,66 @@ def _cmd_list():
     print(f"  共 {len(eps)} 个端点")
 
 
-def _cmd_current():
+def _cmd_current(profile=None):
     from .endpoints import get_current, get_provider_display
-    cur = get_current()
-    display = get_provider_display(cur.get('provider', ''))
-    print(f"Provider  : {cur['provider'] or '(未设置)'} ({display})")
+    cur = get_current(profile)
+    profile_label = f' (profile: {profile})' if profile else ''
+    print(f"Provider  : {cur['provider'] or '(未设置)'} ({get_provider_display(cur.get('provider', ''))}){profile_label}")
     print(f"Base URL  : {cur['base_url'] or '(内置默认)'}")
     print(f"Model     : {cur['model'] or '(未设置)'}")
     print(f"API Key   : {cur['api_key'] or '(环境变量)'}")
+    if profile:
+        print(f"Profile   : {profile}")
 
 
-def _cmd_use(argv):
+def _cmd_use(argv, profile=None):
     if len(argv) < 3:
         print("用法: hermes-switch use <端点名称> [模型]")
         print("示例: hermes-switch use deepseek")
         print("      hermes-switch use myproxy gpt-4")
+        print("      hermes-switch use myproxy -p st67")
         sys.exit(1)
-    from .endpoints import switch_endpoint
+    from .endpoints import switch_endpoint, get_provider_display
     name = argv[2]
-    model = argv[3] if len(argv) > 3 else None
+    model = None
+    # Check for -p/--profile after name
+    remaining = argv[3:] if len(argv) > 3 else []
+    filtered = []
+    for i, arg in enumerate(remaining):
+        if arg in ('-p', '--profile') and i + 1 < len(remaining):
+            profile = remaining[i + 1]
+            break
+        elif not arg.startswith('-'):
+            filtered.append(arg)
+    if filtered:
+        model = filtered[0]
     try:
-        ep = switch_endpoint(name, model)
+        ep = switch_endpoint(name, model, profile=profile)
         target = model or ep.get('model', '')
-        print(f"✓ 已切换到 '{name}' ({ep.get('provider', '')})")
+        prov_display = get_provider_display(ep.get('provider', ''))
+        print(f"✓ 已切换到 '{name}' ({prov_display})")
         if target:
             print(f"  模型: {target}")
+        if profile:
+            print(f"  Profile: {profile}")
+        print("  /reset 生效 (或重启 hermes)")
+    except ValueError as e:
+        print(f"❌ {e}")
+        sys.exit(1)
+
+
+def _cmd_undo(profile=None):
+    from .endpoints import undo_switch
+    try:
+        restored = undo_switch(profile)
+        prov = restored.get('provider', '')
+        model = restored.get('default', '')
+        print(f"✓ 已撤销切换，恢复到上一端点")
+        print(f"  Provider: {prov}")
+        if model:
+            print(f"  Model: {model}")
+        if profile:
+            print(f"  Profile: {profile}")
         print("  /reset 生效 (或重启 hermes)")
     except ValueError as e:
         print(f"❌ {e}")
