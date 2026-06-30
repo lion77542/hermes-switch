@@ -1,105 +1,182 @@
 # Hermes Switch ⚡
 
-**多端点快速切换器 for [Hermes Agent](https://github.com/NousResearch/hermes-agent)**
+**一键切换 AI 模型，就像切换输入法一样简单。**
 
-管理多个 API endpoint + 模型，一键切换。Web UI + CLI 双模式。
+你装了很多 AI（DeepSeek、Kimi、本地模型…），但每次换模型都要改配置文件，烦不烦？
+Hermes Switch 让你在浏览器里点一下，就切换 Hermes Agent 当前用的模型。
 
-## 功能
+---
 
-- 🌐 **Web UI** — 浏览器管理所有端点，内置 Provider（DeepSeek/OpenAI/等）和自定义端点分组显示
-- ⚡ **一键切换** — 选端点 → 选模型 → 切换，带撤销功能
-- 🔍 **连通性测试** — 测试端点是否可用，自动缓存模型列表
-- 📋 **CLI 命令** — `list|use|current` 分组显示
-- 💾 **零依赖** — 只用 Python 标准库 + PyYAML
-- 📱 **响应式 UI** — 自适应手机/平板/桌面，`rem` + `clamp()` 流体排版
+## 小白入门
 
-## 安装
+### 这个工具解决了什么问题？
+
+你用 Hermes Agent 聊天时，只能**同时用一个 AI 模型**（比如 DeepSeek v4）。想换别的（比如本地跑的小模型、或者 Kimi），以前要：
+
+1. 打开配置文件
+2. 找到模型设置那一段
+3. 手动改 provider、api_key、base_url
+4. 保存
+5. 重启 Hermes
+
+**Hermes Switch = 上面的步骤全部自动化**，点点鼠标就搞定。
+
+### 三个核心概念
+
+```
+┌─────────────────────────────────────────────────┐
+│  提供商 (Provider)                               │
+│  ┌──────────┐  ┌──────────┐  ┌────────────────┐ │
+│  │DeepSeek   │  │OpenAI    │  │你的本地模型     │ │
+│  │官方接口    │  │官方接口   │  │(自定义)         │ │
+│  └──────────┘  └──────────┘  └────────────────┘ │
+│       │              │               │           │
+│       ▼              ▼               ▼           │
+│  ┌──────────┐  ┌──────────┐  ┌────────────────┐ │
+│  │deepseek  │  │  openai  │  │ 我的本地代理    │ │
+│  │v4 flash  │  │  gpt-4o  │  │  Qwen3-4B      │ │
+│  │deepseek  │  │  gpt-4o  │  │  Qwen3-VL      │ │
+│  │chat      │  │  mini    │  │  (视觉模型)     │ │
+│  └──────────┘  └──────────┘  └────────────────┘ │
+│          模型 (Model)                             │
+└─────────────────────────────────────────────────┘
+```
+
+- **提供商** — 谁给你提供 AI 服务？DeepSeek、OpenAI、还是你自己电脑上跑的模型？
+- **连接** — 一个提供商 + 它的地址 + 你的 Key。比如「商汤 tokenplan 端点」
+- **模型** — 那个连接上具体用哪个 AI 模型。比如 `deepseek-v4-flash`
+
+> 💡 **一句话：** 你添加「连接」，里面选「模型」，点一下「切换」就生效。
+
+### 安装
 
 ```bash
 pip install git+https://github.com/dlamd/hermes-switch.git
-# 或
-git clone https://github.com/dlamd/hermes-switch.git
-cd hermes-switch
-pip install -e .
 ```
 
-## 使用
-
-### Web UI
+装好后运行：
 
 ```bash
-hermes-switch                   # 启动 Web UI，自动打开浏览器
-hermes-switch web [端口]        # 指定端口启动
-hermes-switch web 9020 -p st67  # 启动并绑定某个 profile
+hermes-switch
 ```
 
-打开浏览器访问 `http://127.0.0.1:9020`
+浏览器自动打开 → 看到 Web UI 界面。
 
-### CLI
+---
+
+## 使用指南
+
+### 第一步：打开 Web UI
 
 ```bash
-hermes-switch list              # 列出所有端点（分组显示）
-hermes-switch current           # 显示当前端点
-hermes-switch current -p st67   # 显示指定 profile 的当前端点
-hermes-switch use st            # 切换到 st 端点（默认 profile）
-hermes-switch use deepseek -p st67   # 切换到 deepseek（st67 profile）
-hermes-switch use st sensenova-6.7-flash-lite -p st67  # 切到指定端点+模型
-hermes-switch undo              # 撤销上次切换（默认 profile）
-hermes-switch undo -p st67      # 撤销指定 profile 的切换
-hermes-switch remove old        # 删除端点
-hermes-switch rescan            # 重新扫描发现端点
+hermes-switch           # 启动，浏览器自动打开
+hermes-switch web 8080  # 指定端口
 ```
 
-## 概念
+界面长这样：
+- 顶栏：当前用的模型名 + 切换开关
+- 卡片列表：你所有可用的 AI 连接
+- 每个卡片有：测试、切换、编辑、删除按钮
 
-| 层级 | 说明 | 示例 |
-|------|------|------|
-| **Provider** | API 服务商类型 | `deepseek`, `openai`, `custom` |
-| **Endpoint** | 具体的 API 接入点 | `st` (token.sensenova.cn), `hc` (api.iamhc.cn) |
-| **Model** | 端点上可用的具体模型 | `deepseek-v4-flash`, `Kimi-K2.6` |
+### 第二步：添加你的 AI 连接
 
-- **内置 Provider**: DeepSeek/OpenAI 等，不用填 base_url，Key 从环境变量读取
-- **自定义端点**: 手动填写 base_url + api_key，如 tokenplan、iamhc、本地代理
+点「+ 添加端点」：
 
-## 端点配置
+1. **名称** — 随便起个名字，比如 `我的DeepSeek`
+2. **提供商** — 选 `deepseek`（内置的直接选，不用填地址）
+3. **模型** — 点「获取」自动拉取可用模型列表，选一个
+4. **保存**
 
-端点存储在 `endpoints.json`（与 Hermes 同目录），Web UI 中自动管理。
+内置的提供商不用填 Base URL 和 Key（Key 从环境变量读取）。
 
-格式示例：
+如果是自定义的（本地模型、第三方代理）：
+- **Base URL** — 填 API 地址，比如 `http://127.0.0.1:8080/v1`
+- **API Key** — 填你的 Key
 
-```json
-{
-  "st": {
-    "base_url": "https://token.sensenova.cn/v1",
-    "api_key": "sk-xxx",
-    "provider": "custom",
-    "model": "deepseek-v4-flash",
-    "note": "商汤日日新",
-    "_models": ["deepseek-v4-flash", "sensenova-6.7-flash-lite"]
-  },
-  "deepseek": {
-    "base_url": "",
-    "provider": "deepseek",
-    "model": "deepseek-chat",
-    "note": "DeepSeek 官方（Key 从环境变量读取）"
-  }
-}
-```
+### 第三步：切换
 
-## 切换后
+在卡片上点「切换」→ 选模型 → 确认。
 
-切换后需要 **`/reset`** 或重启 Hermes 才能生效。Web UI 有「撤销切换」按钮，CLI 有 `undo` 命令。
+然后在 Hermes 里输入 `/reset`，就生效了。
 
-### 多 Profile 支持
+### 第四步（可选）：撤销
 
-Hermes 支持多 profile（`hermes -p <名称>`），可以用 `-p` 参数操作指定 profile：
+切错了？Web UI 顶栏有「撤销切换」按钮，一键恢复。
+
+---
+
+## 高级：如果你用了多个 Hermes Profile
+
+> ⚠️ **大多数人不需要看这节。** 只有当你用 `hermes -p xxx` 启动时才需要。
+
+Hermes 支持多套独立配置（叫 profile）。如果你平时这样启动：
 
 ```bash
-hermes-switch use deepseek -p st67    # 切换 st67 profile 的配置
-hermes-switch current -p st67         # 查看 st67 的当前配置
+hermes -p work    # 工作用配置
+hermes -p home    # 家里用配置
 ```
 
-Web UI 顶栏有 profile 下拉框，选哪个就操作哪个。不指定 profile 则操作默认配置。`HERMES_PROFILE` 环境变量会自动检测当前 profile。
+那切换时也要指定操作哪个 profile：
+
+```bash
+hermes-switch use deepseek -p work      # 切换 work 的模型
+hermes-switch use deepseek -p home      # 切换 home 的模型
+```
+
+Web UI 顶栏有个下拉框，选哪个 profile 就切换哪个的模型。不选就操作默认配置。
+
+> 🤔 **Profile 是什么？** 就是 Hermes 的「独立配置账号」——每个 profile 有自己的模型设置、技能、聊天记录。一般人只用默认的（不指定 -p 启动），就不用管这个。
+
+---
+
+## CLI 命令速查
+
+| 命令 | 作用 |
+|------|------|
+| `hermes-switch` | 启动 Web UI |
+| `hermes-switch list` | 列出所有已添加的连接 |
+| `hermes-switch current` | 看当前在用什么模型 |
+| `hermes-switch use <名称>` | 切换到指定连接 |
+| `hermes-switch use <名称> <模型>` | 切换到指定连接的指定模型 |
+| `hermes-switch undo` | 撤销上次切换 |
+| `hermes-switch remove <名称>` | 删除一个连接 |
+| `hermes-switch rescan` | 重新扫描可用的连接 |
+
+> 💡 CLI 也支持 `-p` 参数指定 profile，用法同上。
+
+---
+
+## 技术细节
+
+### 配置文件
+
+所有连接存储在 `endpoints.json`（在 Hermes 配置目录下），Web UI 自动管理，不用手动编辑。
+
+### 切换原理
+
+hermes-switch 修改 Hermes 的 `config.yaml` 文件中的 `model` 段：
+
+```yaml
+# 切换前
+model:
+  provider: deepseek
+  default: deepseek-v4-flash
+
+# 切换后（点了一下）
+model:
+  provider: custom
+  base_url: https://token.sensenova.cn/v1
+  api_key: sk-xxx
+  default: sensenova-6.7-flash-lite
+```
+
+改完后在 Hermes 输入 `/reset` 重新加载配置，就切换成功。
+
+### 撤销原理
+
+每次切换前会自动备份当前的配置。点撤销就恢复备份文件的内容。
+
+---
 
 ## License
 
