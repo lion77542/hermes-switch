@@ -54,9 +54,9 @@ def main():
     elif cmd == 'undo':
         _cmd_undo(profile=profile)
     elif cmd == 'remove':
-        _cmd_remove(sys.argv)
+        _cmd_remove(sys.argv, profile=profile)
     elif cmd == 'rescan':
-        _cmd_rescan()
+        _cmd_rescan(profile=profile)
     elif cmd == 'stop':
         _cmd_stop()
     else:
@@ -82,7 +82,7 @@ def _cmd_list(profile=None):
         load_endpoints, get_current,
         get_provider_family, get_provider_display
     )
-    eps = load_endpoints()
+    eps = load_endpoints(profile)
     cur = get_current(profile)
 
     if not eps:
@@ -199,25 +199,25 @@ def _cmd_remove(argv):
         sys.exit(1)
     from .endpoints import load_endpoints, save_endpoints
     name = argv[2]
-    eps = load_endpoints()
+    eps = load_endpoints(profile)
     if name not in eps:
         print(f"❌ 端点 '{name}' 不存在")
         sys.exit(1)
     del eps[name]
-    save_endpoints(eps)
+    save_endpoints(eps, profile)
     print(f"✓ 已删除 '{name}'")
 
 
-def _cmd_rescan():
+def _cmd_rescan(profile=None):
     from .endpoints import auto_discover, load_endpoints, save_endpoints
     from .server import Handler
-    discovered = auto_discover()
-    existing = load_endpoints()
+    discovered = auto_discover(profile)
+    existing = load_endpoints(profile)
     fresh = dict(discovered)
     for name, ep in existing.items():
         if name not in fresh and not Handler._is_auto_discovered(ep):
             fresh[name] = ep
-    save_endpoints(fresh)
+    save_endpoints(fresh, profile)
     print(f"✓ 扫描完成：发现 {len(discovered)} 个，合并后共 {len(fresh)} 个端点")
     removed = len(existing) - (len(fresh) - len(discovered)) - len(discovered)
     if removed > 0:
