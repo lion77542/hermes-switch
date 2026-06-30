@@ -82,7 +82,15 @@ CONFIG_FILE = os.path.join(_hermes_dir(), 'config.yaml')
 ENV_FILE = os.path.join(_hermes_dir(), '.env')
 PID_FILE = os.path.join(_hermes_dir(), 'hermes-switch.pid')
 
-# 已知 Provider 元信息（内置 = 不需要手动填 base_url，有默认地址）
+
+def _endpoints_path(profile=None):
+    """Get endpoints file path. Per-profile if profile is set, global otherwise."""
+    if profile:
+        return os.path.join(_hermes_dir(profile), 'endpoints.json')
+    return ENDPOINTS_FILE
+
+
+# 已知 Provider 元信息
 KNOWN_PROVIDERS = {
     'deepseek':      {'env': 'DEEPSEEK_API_KEY',      'name': 'DeepSeek',         'base': 'https://api.deepseek.com/v1'},
     'openai':        {'env': 'OPENAI_API_KEY',        'name': 'OpenAI',           'base': 'https://api.openai.com/v1'},
@@ -149,9 +157,21 @@ def save_config(cfg, profile=None):
         yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False)
 
 
-def load_endpoints():
-    """Load endpoints. Auto-discover on first run or if file is empty/corrupted."""
-    if os.path.exists(ENDPOINTS_FILE):
+def load_endpoints(profile=None):
+    """Load endpoints for a profile (or global if no profile).
+    Falls back to global endpoints.json for backward compatibility."""
+    path = _endpoints_path(profile)
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data:
+                return _normalize_all(data)
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    # Fallback: try global endpoints file
+    if profile and os.path.exists(ENDPOINTS_FILE):
         try:
             with open(ENDPOINTS_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -160,15 +180,16 @@ def load_endpoints():
         except (json.JSONDecodeError, IOError):
             pass
 
-    discovered = auto_discover()
+    discovered = auto_discover(profile)
     if discovered:
-        save_endpoints(discovered)
+        save_endpoints(discovered, profile)
     return discovered
 
 
-def save_endpoints(eps):
-    os.makedirs(os.path.dirname(ENDPOINTS_FILE), exist_ok=True)
-    with open(ENDPOINTS_FILE, 'w', encoding='utf-8') as f:
+def save_endpoints(eps, profile=None):
+    path = _endpoints_path(profile)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
         json.dump(eps, f, indent=2, ensure_ascii=False)
 
 
@@ -227,54 +248,16 @@ def _find_matching_profile(provider, base_url, api_key=''):
     return None
 
 
-def auto_discover():
-    """Scan all sources for usable endpoints.
+def auto_discover(profile=None):
+    """Scan sources for usable endpoints, optionally scoped to a profile.
 
-    Sources (priority order, later sources don't overwrite earlier):
-    1. Current active config (model section)
-    2. custom_providers in main config
-    3. All profiles
-    4. Profile custom_providers
+    When a profile is set: shows only that profile's endpoints + built-in providers.
+    Without profile: scans all profiles + main config.
     """
     discovered = {}
-    cfg = load_config()
-    model_cfg = cfg.get('model', {})
     envs = _read_env_vars()
 
-    # ── 1) Current active endpoint ──
-    cur_provider = model_cfg.get('provider', '')
-    cur_url = model_cfg.get('base_url', '')
-    cur_model = model_cfg.get('default', '')
-    cur_key = model_cfg.get('api_key', '')
-
-    if cur_provider:
-        # Determine name: for built-in providers use provider name,
-        # for custom with URL, use hostname (but check if a profile matches first)
-        if cur_provider in KNOWN_PROVIDERS:
-            name = cur_provider
-        elif cur_url:
-            # Check profiles first - if a profile has the same provider+base_url, use that name
-            match = _find_matching_profile(cur_provider, cur_url, cur_key)
-            if match:
-                name = match
-            else:
-                try:
-                    name = urlparse(cur_url).hostname or cur_provider
-                except Exception:
-                    name = cur_provider
-        else:
-            name = cur_provider
-
-        discovered[name] = _normalize({
-            'base_url': cur_url,
-            'api_key': cur_key,
-            'provider': cur_provider,
-            'model': cur_model,
-            'note': '当前活跃配置',
-            '_source': '当前配置',
-        })
-
-    # ── 2) Known providers with .env keys — clearly marked as built-in ──
+    # ── 1) Built-in providers with env keys (always shown) ──
     for provider, info in KNOWN_PROVIDERS.items():
         if info['env'] in envs:
             raw_val = envs[info['env']]
@@ -284,72 +267,99 @@ def auto_discover():
                 continue
             if len(raw_val) < 10:
                 continue
-            if provider not in discovered:
-                discovered[provider] = _normalize({
-                    'base_url': '',
-                    'api_key': '',
-                    'provider': provider,
-                    'model': '',
-                    'note': f'检测到 {info["env"]}，Key 从环境变量读取',
-                    '_source': f'环境变量 {info["env"]}',
-                })
+            discovered[provider] = _normalize({
+                'base_url': '',
+                'api_key': '',
+                'provider': provider,
+                'model': '',
+                'note': f'Key 从 {info["env"]} 环境变量读取',
+                '_source': f'env:{info["env"]}',
+            })
 
-    # ── 3) custom_providers in main config ──
-    for name, cp in cfg.get('custom_providers', {}).items():
-        if name not in discovered:
-            discovered[name] = _normalize({
+    # ── 2) Profile-specific or global scan ──
+    if profile:
+        _scan_single_profile(profile, discovered)
+    else:
+        # No profile: scan main config + all profiles
+        cfg = load_config()
+        # Main config custom_providers
+        for name, cp in cfg.get('custom_providers', {}).items():
+            if name not in discovered:
+                discovered[name] = _normalize({
+                    'base_url': cp.get('base_url', ''),
+                    'api_key': cp.get('api_key', ''),
+                    'provider': 'custom',
+                    'model': cp.get('model', cp.get('default', '')),
+                    'note': cp.get('note', ''),
+                    '_source': 'config custom_providers',
+                })
+        # Main config current active
+        model_cfg = cfg.get('model', {})
+        cur_provider = model_cfg.get('provider', '')
+        if cur_provider and cur_provider not in discovered:
+            cur_url = model_cfg.get('base_url', '')
+            cur_name = cur_provider if cur_provider in KNOWN_PROVIDERS else (urlparse(cur_url).hostname if cur_url else cur_provider)
+            if cur_name not in discovered:
+                discovered[cur_name] = _normalize({
+                    'base_url': cur_url,
+                    'api_key': model_cfg.get('api_key', ''),
+                    'provider': cur_provider,
+                    'model': model_cfg.get('default', ''),
+                    'note': '当前活跃配置',
+                    '_source': '当前配置',
+                })
+        # All profiles
+        profiles_dir = os.path.join(_hermes_dir(), 'profiles')
+        if os.path.isdir(profiles_dir):
+            for pname in sorted(os.listdir(profiles_dir)):
+                _scan_single_profile(pname, discovered, source_prefix=f'profile:{pname}')
+
+    return discovered
+
+
+def _scan_single_profile(pname, discovered, source_prefix=''):
+    """Scan a single profile's config.yaml for endpoints to add to the discovered dict."""
+    pcfg_path = os.path.join(_hermes_dir(pname), 'config.yaml')
+    if not os.path.isfile(pcfg_path):
+        return
+    try:
+        with open(pcfg_path, 'r', encoding='utf-8') as f:
+            pcfg = yaml.safe_load(f.read()) or {}
+    except Exception:
+        return
+
+    pm = pcfg.get('model', {})
+    pp = pm.get('provider', '')
+    if pp:
+        if pp in KNOWN_PROVIDERS:
+            key = pp
+        elif pm.get('base_url'):
+            try:
+                key = urlparse(pm['base_url']).hostname or pp
+            except Exception:
+                key = pp
+        else:
+            key = pp
+        if key not in discovered:
+            discovered[key] = _normalize({
+                'base_url': pm.get('base_url', ''),
+                'api_key': pm.get('api_key', ''),
+                'provider': pp,
+                'model': pm.get('default', ''),
+                'note': f'{pname} 当前模型',
+                '_source': f'{source_prefix or pname}/config.yaml',
+            })
+
+    for cn, cp in pcfg.get('custom_providers', {}).items():
+        if cn not in discovered:
+            discovered[cn] = _normalize({
                 'base_url': cp.get('base_url', ''),
                 'api_key': cp.get('api_key', ''),
                 'provider': 'custom',
                 'model': cp.get('model', cp.get('default', '')),
-                'note': cp.get('note', 'custom_providers'),
-                '_source': 'config custom_providers',
+                'note': cp.get('note', f'{pname} custom'),
+                '_source': f'{source_prefix or pname}/custom_providers',
             })
-
-    # ── 4) Profiles ──
-    profiles_dir = os.path.join(_hermes_dir(), 'profiles')
-    if os.path.isdir(profiles_dir):
-        for pname in sorted(os.listdir(profiles_dir)):
-            pcfg_path = os.path.join(profiles_dir, pname, 'config.yaml')
-            if not os.path.isfile(pcfg_path):
-                continue
-            try:
-                with open(pcfg_path, 'r', encoding='utf-8') as f:
-                    pcfg = yaml.safe_load(f.read()) or {}
-            except Exception:
-                continue
-
-            pm = pcfg.get('model', {})
-            pp = pm.get('provider', '')
-            pu = pm.get('base_url', '')
-            pmodel = pm.get('default', '')
-            pkey = pm.get('api_key', '')
-
-            if pp:
-                key = pname
-                if key not in discovered:
-                    discovered[key] = _normalize({
-                        'base_url': pu,
-                        'api_key': pkey,
-                        'provider': pp,
-                        'model': pmodel,
-                        'note': f'Profile: {pname}',
-                        '_source': f'profiles/{pname}/config.yaml',
-                    })
-
-            # Profile custom_providers
-            for cn, cp in pcfg.get('custom_providers', {}).items():
-                if cn not in discovered:
-                    discovered[cn] = _normalize({
-                        'base_url': cp.get('base_url', ''),
-                        'api_key': cp.get('api_key', ''),
-                        'provider': 'custom',
-                        'model': cp.get('model', cp.get('default', '')),
-                        'note': f'Profile {pname}: custom_provider',
-                        '_source': f'profiles/{pname}/custom_providers',
-                    })
-
-    return discovered
 
 
 def switch_endpoint(name, model=None, params=None, profile=None):
