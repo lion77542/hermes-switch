@@ -12,13 +12,21 @@ import os, json, yaml, sys, ssl, time, urllib.request
 from urllib.parse import urlparse
 
 
-def _hermes_dir():
+def _hermes_dir(profile=None):
     if os.name == 'nt':
         d = os.environ.get('LOCALAPPDATA', '')
         if not d:
             d = os.path.expanduser('~/AppData/Local')
-        return os.path.join(d, 'hermes')
-    return os.path.expanduser('~/.hermes')
+        base = os.path.join(d, 'hermes')
+    else:
+        base = os.path.expanduser('~/.hermes')
+    if profile:
+        return os.path.join(base, 'profiles', profile)
+    return base
+
+def _active_profile():
+    """Detect the active Hermes profile from environment."""
+    return os.environ.get('HERMES_PROFILE', '')
 
 
 def write_pid():
@@ -121,19 +129,23 @@ def _read_env_vars():
     return envs
 
 
-def load_config():
-    if not os.path.exists(CONFIG_FILE):
+def load_config(profile=None):
+    dir = _hermes_dir(profile)
+    cfg_file = os.path.join(dir, 'config.yaml')
+    if not os.path.exists(cfg_file):
         return {}
     try:
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+        with open(cfg_file, 'r', encoding='utf-8') as f:
             return yaml.safe_load(f.read()) or {}
     except Exception:
         return {}
 
 
-def save_config(cfg):
-    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+def save_config(cfg, profile=None):
+    dir = _hermes_dir(profile)
+    os.makedirs(dir, exist_ok=True)
+    cfg_file = os.path.join(dir, 'config.yaml')
+    with open(cfg_file, 'w', encoding='utf-8') as f:
         yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False)
 
 
@@ -180,8 +192,8 @@ def _normalize_all(eps):
     return {k: _normalize(v) for k, v in eps.items()}
 
 
-def get_current():
-    cfg = load_config()
+def get_current(profile=None):
+    cfg = load_config(profile)
     m = cfg.get('model', {})
     key = m.get('api_key', '') or ''
     masked = key[:15] + '...' if len(key) > 15 else (key[:6] + '...' if key else '')
@@ -340,21 +352,21 @@ def auto_discover():
     return discovered
 
 
-def switch_endpoint(name, model=None, params=None):
+def switch_endpoint(name, model=None, params=None, profile=None):
     """Switch to a named endpoint, optionally with a specific model and params."""
     eps = load_endpoints()
     if name not in eps:
         raise ValueError(f"端点 '{name}' 不存在")
 
     ep = eps[name]
-    cfg = load_config()
+    cfg = load_config(profile)
 
     # Backup for undo
-    backup = {'model': dict(cfg.get('model', {}))}
+    backup = {'model': dict(cfg.get('model', {})), 'profile': profile}
     # Also backup agent.reasoning_effort if set
     if 'agent' in cfg and 'reasoning_effort' in cfg.get('agent', {}):
         backup['agent'] = {'reasoning_effort': cfg['agent']['reasoning_effort']}
-    _save_backup(backup)
+    _save_backup(backup, profile)
 
     if 'model' not in cfg:
         cfg['model'] = {}
@@ -395,40 +407,41 @@ def switch_endpoint(name, model=None, params=None):
             cfg['agent'] = {}
         cfg['agent']['reasoning_effort'] = reasoning
 
-    save_config(cfg)
+    save_config(cfg, profile)
     return ep
 
 
-def _backup_path():
-    return CONFIG_FILE + '.hermes-switch.bak'
+def _backup_path(profile=None):
+    dir = _hermes_dir(profile)
+    return os.path.join(dir, 'config.yaml.hermes-switch.bak')
 
 
-def _save_backup(cfg_snapshot):
+def _save_backup(cfg_snapshot, profile=None):
     try:
-        os.makedirs(os.path.dirname(_backup_path()), exist_ok=True)
-        with open(_backup_path(), 'w', encoding='utf-8') as f:
+        os.makedirs(os.path.dirname(_backup_path(profile)), exist_ok=True)
+        with open(_backup_path(profile), 'w', encoding='utf-8') as f:
             yaml.dump(cfg_snapshot, f, allow_unicode=True, default_flow_style=False)
     except Exception:
         pass
 
 
-def undo_switch():
+def undo_switch(profile=None):
     """Undo last switch, restoring backed-up config."""
-    bp = _backup_path()
+    bp = _backup_path(profile)
     if not os.path.exists(bp):
         raise ValueError('没有可撤销的切换（未找到备份）')
     with open(bp, 'r', encoding='utf-8') as f:
         backup = yaml.safe_load(f.read()) or {}
     if not backup.get('model', {}).get('provider'):
         raise ValueError('备份无效')
-    cfg = load_config()
+    cfg = load_config(profile)
     cfg['model'] = backup['model']
     # Restore agent.reasoning_effort if backed up
     if 'agent' in backup:
         if 'agent' not in cfg:
             cfg['agent'] = {}
         cfg['agent']['reasoning_effort'] = backup['agent']['reasoning_effort']
-    save_config(cfg)
+    save_config(cfg, profile)
     try:
         os.remove(bp)
     except Exception:
@@ -436,8 +449,8 @@ def undo_switch():
     return backup['model']
 
 
-def has_undo():
-    return os.path.exists(_backup_path())
+def has_undo(profile=None):
+    return os.path.exists(_backup_path(profile))
 
 
 def fetch_models(base_url, api_key, provider='custom', proxy=''):
