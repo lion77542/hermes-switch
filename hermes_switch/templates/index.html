@@ -167,6 +167,9 @@ body{font:400 1rem/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-s
     <div class="cur-badge">
       <i></i> 当前: <b id="curLabel">加载中…</b>
     </div>
+    <select id="profileSelect" onchange="onProfileChange()" style="padding:4px 8px;background:var(--btn-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none;cursor:pointer;font-family:inherit">
+      <option value="">默认</option>
+    </select>
     <div style="font-size:11px;color:var(--dim)" id="statsLabel"></div>
   </div>
 </div>
@@ -283,6 +286,8 @@ body{font:400 1rem/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-s
 let _eps = {};
 let _cur = {};
 let _stats = {};
+let _profiles = [];
+let _activeProfile = '';
 const $ = id => document.getElementById(id);
 const api = async (method, path, body) => {
   const o = {method, headers: {'Content-Type': 'application/json'}};
@@ -290,6 +295,12 @@ const api = async (method, path, body) => {
   const r = await fetch(path, o);
   return r.json();
 };
+
+function profileQ() {
+  /* Return ?profile=xxx query string or empty string */
+  var p = _activeProfile || '';
+  return p ? '?profile=' + encodeURIComponent(p) : '';
+}
 
 function toast(msg, cls) {
   cls = cls || 'ok';
@@ -312,8 +323,28 @@ function esc(s) {
 
 async function refresh() {
   try {
-    var d = await api('GET', '/api/endpoints');
-    var u = await api('GET', '/api/undo');
+    // Fetch profiles
+    var pdata = await api('GET', '/api/profiles');
+    if (pdata && pdata.profiles) {
+      _profiles = pdata.profiles;
+      _activeProfile = pdata.active || '';
+      var sel = $('profileSelect');
+      if (sel) {
+        var curVal = sel.value;
+        sel.innerHTML = '<option value="">默认</option>';
+        for (var i = 0; i < _profiles.length; i++) {
+          var selected = (_profiles[i] === _activeProfile) ? ' selected' : '';
+          var opt = document.createElement('option');
+          opt.value = _profiles[i];
+          opt.textContent = _profiles[i];
+          if (_profiles[i] === _activeProfile) opt.selected = true;
+          sel.appendChild(opt);
+        }
+      }
+    }
+    var q = profileQ();
+    var d = await api('GET', '/api/endpoints' + q);
+    var u = await api('GET', '/api/undo' + q);
     _eps = d.endpoints || {};
     _cur = d.current || {};
     _stats = d.stats || {};
@@ -324,6 +355,14 @@ async function refresh() {
     render();
   } catch (e) {
     toast('加载失败: ' + e.message, 'err');
+  }
+}
+
+function onProfileChange() {
+  var sel = $('profileSelect');
+  if (sel) {
+    _activeProfile = sel.value;
+    refresh();
   }
 }
 
@@ -786,7 +825,7 @@ async function switchEp(name) {
   var body = {name: name, model: result.model, params: {}};
   if (result.reasoning_effort) body.params.reasoning_effort = result.reasoning_effort;
 
-  var r = await api('POST', '/api/switch', body);
+  var r = await api('POST', '/api/switch' + profileQ(), body);
   if (r.error) { toast(r.error, 'err'); return; }
   var msg = '已切换到 "' + name + '" · ' + (result.model || e.model || '默认');
   if (result.reasoning_effort) msg += ' · 推理=' + result.reasoning_effort;
@@ -848,7 +887,7 @@ async function doRescan() {
   btn.disabled = true;
   btn.textContent = '扫描中…';
   try {
-    var r = await api('GET', '/api/rescan');
+    var r = await api('GET', '/api/rescan' + profileQ());
     if (r.ok) toast('扫描完成: ' + r.found + ' 个新端点，共 ' + r.total + ' 个', 'info');
     else toast(r.error || '扫描失败', 'err');
   } catch (e) { toast('扫描失败: ' + e.message, 'err'); }
@@ -858,7 +897,7 @@ async function doRescan() {
 }
 
 async function doUndo() {
-  var r = await api('POST', '/api/undo');
+  var r = await api('POST', '/api/undo' + profileQ());
   if (r.error) { toast(r.error, 'err'); return; }
   toast('已撤销 — 恢复为 ' + r.restored + ' · ' + r.model);
   await refresh();
